@@ -1,5 +1,9 @@
 # Network monitoring with eBPF
 
+The first working version of this project was developed in this repo: https://github.com/FedeParola/network-monitoring-ebpf.
+
+The current version of the code, instead, contains some enhancements starting from that code for monitoring L3 and L4 traffic.
+
 Initial program for the network monitoring with eBPF lab of the software networking course
 
 ## Building
