@@ -1,4 +1,6 @@
-#include <errno.h>	     /* Error codes */
+#include <string.h>
+#include <stdint.h>
+#include <errno.h>	     	/* Error codes */
 #include <linux/bpf.h>	    /* Definition of struct __sk_buff, the parameter
 							* passed to our eBPF program
 							*/
@@ -7,9 +9,9 @@
 							* (e.g. TC_ACT_OK)
 							*/
 #include <linux/if_ether.h>  /* Definition of struct ethhdr */
-#include <linux/ip.h>	     /* Definition of struct iphdr */
-#include <linux/tcp.h>	     /* Definition of struct tcphdr */
-#include <linux/udp.h>	     /* Definition of struct udphdr */
+//#include <linux/ip.h>	     /* Definition of struct iphdr */
+//#include <linux/tcp.h>	     /* Definition of struct tcphdr */
+//#include <linux/udp.h>	     /* Definition of struct udphdr */
 #include <bpf/bpf_endian.h> /* Helpers to convert endiannes
 							* (e.g., bpf_ntohs())
 							*/
@@ -36,9 +38,6 @@ struct {
 SEC("tc")
 int tc_prog(struct __sk_buff *ctx)
 {
-	/* 5-tuple which identifies the packet currently analyzed in the eBPF map*/
-	struct key_tuple tuple;
-
 	/* Retrieve pointers to the begin and end of the packet buffer */
 	void *data = (void *)(unsigned long)ctx->data;
 	void *data_end = (void *)(unsigned long)ctx->data_end;
@@ -56,63 +55,48 @@ int tc_prog(struct __sk_buff *ctx)
 		 */
 		return TC_ACT_SHOT;
 	}
-	bpf_printk("Ethernet ok");
+
+	/* Looking for IP packets, other kind of packets are not managed */
+	if (bpf_ntohs(eth->h_proto) != ETHERTYPE_IP)
+		return TC_ACT_SHOT;
+
 	/* Look for ip address (both source and destination) and port (both source 
 	*  and destination) as well
 	*/
-	struct iphdr *ip = data + sizeof(*eth);
-	int ip_size = 4 * (ip->ihl & 0x0F);
+	ip_header *ip = data + sizeof(*eth);
 	/* Every time we access the packet buffer the eBPF verifier requires us
 	 * to explicitly check that the address we are accessing doesn't exceed
 	 * the buffer limits (check over IP layer)
 	 */
-	if (data + sizeof(*eth) + ip_size > data_end) {
+	if (data + sizeof(*eth) + sizeof(*ip) > data_end) {
 		/* The packet is malformed, the TC_ACT_SHOT return code
 		 * instructs the kernel to drop it
 		 */
 		return TC_ACT_SHOT;
 	}
-	bpf_printk("IP ok");
-	/* Assign the information ( source ip and dest ip) from the currently analyzed packet */
-	tuple.source_address = bpf_ntohs(ip->saddr);
-	tuple.destination_address = bpf_ntohs(ip->daddr);
+	int ip_size = 4 * (ip->ver_ihl & 0x0F);
 
-	if (ip->protocol == TCP_IP){
-		/* Assign the information (the protocol over IP) from the currently analyzed packet */
-		tuple.protocol = TCP_IP;
-		/* Look for connection ports (both source and destination) */
-		struct tcphdr *tcp = data + sizeof(*eth) + ip_size;
-		/* Every time we access the packet buffer the eBPF verifier requires us
-		* to explicitly check that the address we are accessing doesn't exceed
-		* the buffer limits (check over IP layer)
+	/* Look for connection ports (both source and destination) */
+	tcp_header *tcp = data + sizeof(*eth) + ip_size + 2;
+	/* Every time we access the packet buffer the eBPF verifier requires us
+	* to explicitly check that the address we are accessing doesn't exceed
+	* the buffer limits (check over IP layer)
+	*/
+	if (data + sizeof(*eth) + 20 + ip_size + sizeof(*tcp) > data_end) {
+		/* The packet is malformed, the TC_ACT_SHOT return code
+		* instructs the kernel to drop it
 		*/
-		if (data + sizeof(*eth) + ip_size + sizeof(*tcp) > data_end) {
-			/* The packet is malformed, the TC_ACT_SHOT return code
-			* instructs the kernel to drop it
-			*/
-			return TC_ACT_SHOT;
-		}
-		tuple.source_port = bpf_ntohs(tcp->source);
-		tuple.destination_port = bpf_ntohs(tcp->dest);
-	}else if (ip->protocol == UDP_IP){
-		/* Assign the information (the protocol over IP) from the currently analyzed packet */
-		tuple.protocol = UDP_IP;
-		/* Look for connection ports (both source and destination) */
-		struct udphdr *udp = data + sizeof(*eth) + ip_size;
-		/* Every time we access the packet buffer the eBPF verifier requires us
-		* to explicitly check that the address we are accessing doesn't exceed
-		* the buffer limits (check over IP layer)
-		*/
-		if (data + sizeof(*eth) + ip_size + sizeof(*udp) > data_end) {
-			/* The packet is malformed, the TC_ACT_SHOT return code
-			* instructs the kernel to drop it
-			*/
-			return TC_ACT_SHOT;
-		}
-		tuple.source_port = bpf_ntohs(udp->source);
-		tuple.destination_port = bpf_ntohs(udp->dest);
+		return TC_ACT_SHOT;
 	}
 
+	/* 5-tuple which identifies the packet currently analyzed in the eBPF map*/
+	struct key_tuple tuple;
+	tuple.protocol = TCP_IP;
+	memcpy(tuple.source_address, ip->source_addr, sizeof(__u8) * 4);
+	memcpy(tuple.destination_address, ip->dest_addr, sizeof(__u8) * 4);
+	tuple.source_port = tcp->sport;
+	tuple.destination_port = tcp->dport;
+	
 	/* Look for an existing entry in the hash map */
 	struct l3proto_stats *val;
 	val = bpf_map_lookup_elem(&l3protos_stats, &tuple);

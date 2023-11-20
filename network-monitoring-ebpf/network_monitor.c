@@ -36,12 +36,19 @@ static int dump_l3protos_map(struct bpf_map *map)
 	while (!err) {
 		struct l3proto_stats val;
 		if (bpf_map__lookup_elem(map, &key, sizeof(key), &val, sizeof(val), 0)) {
-			fprintf(stderr, "Error reading key [Source IP: %d, Source Port: %d, Destionation IP: %d, Destionation Port: %d, Proto: %s] from map: %s\n", key.source_address, bpf_ntohs(key.source_port), key.destination_address, bpf_ntohs(key.destination_port), proto_to_string(key.protocol), strerror(errno));
+			fprintf(stderr, "Error reading key [Source IP: %d.%d.%d.%d, Source Port: %d, Destionation IP: %d.%d.%d.%d, Destionation Port: %d, Proto: %s] from map: %s\n", 
+			key.source_address[0], key.source_address[1], key.source_address[2], key.source_address[3],
+			bpf_ntohs(key.source_port), 
+			key.destination_address[0], key.destination_address[1], key.destination_address[2], key.destination_address[3],
+			bpf_ntohs(key.destination_port), proto_to_string(key.protocol), strerror(errno)); 
 			return -1;
 		}
 
-		printf("Source IP: %d, Source Port: %d, Destionation IP: %d, Destionation Port: %d, Proto: %s, Pkts: %lu, Bytes: %lu\n", 
-			key.source_address, bpf_ntohs(key.source_port), key.destination_address, bpf_ntohs(key.destination_port), proto_to_string(key.protocol), val.pkts, val.bytes);
+		printf("Source IP: %d.%d.%d.%d, Source Port: %d, Destionation IP: %d.%d.%d.%d, Destionation Port: %d, Proto: %s, Pkts: %lu, Bytes: %lu\n", 
+			key.source_address[0], key.source_address[1], key.source_address[2], key.source_address[3], 
+			bpf_ntohs(key.source_port), 
+			key.destination_address[0], key.destination_address[1], key.destination_address[2], key.destination_address[3],
+			bpf_ntohs(key.destination_port), proto_to_string(key.protocol), val.pkts, val.bytes); 
 
 		err = bpf_map__get_next_key(map, &key, &key, sizeof(key));
 	}
