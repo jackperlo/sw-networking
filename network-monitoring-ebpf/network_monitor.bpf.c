@@ -8,7 +8,7 @@
 							* programs attached to the TC hook
 							* (e.g. TC_ACT_OK)
 							*/
-#include <linux/if_ether.h>  /* Definition of struct ethhdr */
+//#include <linux/if_ether.h>  /* Definition of struct ethhdr */
 //#include <linux/ip.h>	     /* Definition of struct iphdr */
 //#include <linux/tcp.h>	     /* Definition of struct tcphdr */
 //#include <linux/udp.h>	     /* Definition of struct udphdr */
@@ -77,12 +77,12 @@ int tc_prog(struct __sk_buff *ctx)
 	int ip_size = 4 * (ip->ver_ihl & 0x0F);
 
 	/* Look for connection ports (both source and destination) */
-	tcp_header *tcp = data + sizeof(*eth) + ip_size + 2;
+	tcp_header *tcp = data + sizeof(*eth) + ip_size;
 	/* Every time we access the packet buffer the eBPF verifier requires us
 	* to explicitly check that the address we are accessing doesn't exceed
 	* the buffer limits (check over IP layer)
 	*/
-	if (data + sizeof(*eth) + 20 + ip_size + sizeof(*tcp) > data_end) {
+	if (data + sizeof(*eth) + ip_size + sizeof(*tcp) > data_end) {
 		/* The packet is malformed, the TC_ACT_SHOT return code
 		* instructs the kernel to drop it
 		*/
@@ -90,10 +90,10 @@ int tc_prog(struct __sk_buff *ctx)
 	}
 
 	/* 5-tuple which identifies the packet currently analyzed in the eBPF map*/
-	struct key_tuple tuple;
+	struct key_tuple tuple = {0};
 	tuple.protocol = TCP_IP;
-	memcpy(tuple.source_address, ip->source_addr, sizeof(__u8) * 4);
-	memcpy(tuple.destination_address, ip->dest_addr, sizeof(__u8) * 4);
+	memcpy(&tuple.source_address, &ip->source_addr, sizeof(__u8) * 4);
+	memcpy(&tuple.destination_address, &ip->dest_addr, sizeof(__u8) * 4);
 	tuple.source_port = tcp->sport;
 	tuple.destination_port = tcp->dport;
 	

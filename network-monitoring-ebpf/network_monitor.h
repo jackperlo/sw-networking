@@ -2,13 +2,13 @@
 
 /* Ethernet protocol ID's */
 #define	ETHERTYPE_IP		0x0800		/* IP */
-/* Ethernet II header 
+/* Ethernet II header */
 typedef struct ether_header{
-    uint8_t ether_dest_host[6]; /*6 bytes destination address
-    uint8_t ether_source_host[6]; /*6 bytes source address
-    uint16_t ether_type; /*2 bytes ether type
+    uint8_t ether_dest_host[6]; /*6 bytes destination address*/
+    uint8_t ether_source_host[6]; /*6 bytes source address*/
+    uint16_t ether_type; /*2 bytes ether type*/
 }ethernet_header;
-*/
+
 /* IP protocol ID's */
 #define TCP_IP 06		  /* TCP over IP */
 #define	UDP_IP 17		/* UDP over IP */
